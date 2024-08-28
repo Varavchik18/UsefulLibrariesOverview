@@ -2,6 +2,9 @@ using Microsoft.Extensions.Options;
 using Refit;
 using Serilog;
 using Serilog.Events;
+using Polly;
+using System.Net;
+using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,9 +22,13 @@ builder.Services.AddRefitClient<IGitHubApi>()
         client.BaseAddress = new Uri(settings.BaseAddress);
         client.DefaultRequestHeaders.Add("Authorization", settings.AccessToken);
         client.DefaultRequestHeaders.Add("User-Agent", settings.UserAgent);
-    });
+    })
+    .AddPolicyHandler(PollyPoliciesExtensions.GetCombinedPolicy());
 
-// Retrieve the Serilog settings
+builder.Services.AddControllers()
+    .AddFluentValidation(fv => fv.RegisterValidatorsFromAssemblyContaining<GitHubUserValidator>());
+
+
 var serilogSettings = builder.Services.BuildServiceProvider().GetRequiredService<IOptions<SerilogSettings>>().Value;
 
 // Configure Serilog
