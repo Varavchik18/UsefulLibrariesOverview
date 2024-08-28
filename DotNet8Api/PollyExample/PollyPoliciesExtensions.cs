@@ -21,12 +21,6 @@ public static class PollyPoliciesExtensions
         IAsyncPolicy<HttpResponseMessage> timeoutPolicy = Policy
             .TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(10));
 
-        IAsyncPolicy<HttpResponseMessage> circuitBreakerPolicy = Policy
-            .Handle<HttpRequestException>()
-            .CircuitBreakerAsync(
-                exceptionsAllowedBeforeBreaking: 3,
-                durationOfBreak: TimeSpan.FromSeconds(30)) as IAsyncPolicy<HttpResponseMessage>;
-
         IAsyncPolicy<HttpResponseMessage> bulkheadPolicy = Policy
             .BulkheadAsync<HttpResponseMessage>(maxParallelization: 10, maxQueuingActions: 5);
 
@@ -38,7 +32,7 @@ public static class PollyPoliciesExtensions
                 Content = new StringContent("This is a fallback response")
             });
 
-        var combinedPolicy = Policy.WrapAsync(retryPolicyWithLogging, circuitBreakerPolicy, timeoutPolicy);
+        var combinedPolicy = Policy.WrapAsync(retryPolicyWithLogging, timeoutPolicy, bulkheadPolicy, fallbackPolicy);
 
         return combinedPolicy;
     }

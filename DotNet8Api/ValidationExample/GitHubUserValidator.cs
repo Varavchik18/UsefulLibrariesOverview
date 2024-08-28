@@ -20,9 +20,5 @@ public class GitHubUserValidator : AbstractValidator<GitHubUser>
 
         RuleFor(user => user.Following)
             .GreaterThanOrEqualTo(0).WithMessage("Following count cannot be negative.");
-
-        RuleFor(user => user.AvatarUrl)
-            .Must(uri => Uri.IsWellFormedUriString(uri, UriKind.Absolute))
-            .WithMessage("Invalid URL format for AvatarUrl.");
     }
 }
