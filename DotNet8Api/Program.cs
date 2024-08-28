@@ -1,9 +1,47 @@
+using Microsoft.Extensions.Options;
+using Refit;
+using Serilog;
+using Serilog.Events;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.Configure<SerilogSettings>(builder.Configuration.GetSection("Serilog"));
+builder.Services.Configure<GitHubSettings>(builder.Configuration.GetSection("GitHubSettings"));
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddRefitClient<IGitHubApi>()
+    .ConfigureHttpClient((sp, client) =>
+    {
+        var settings = sp.GetRequiredService<IOptions<GitHubSettings>>().Value;
+        client.BaseAddress = new Uri(settings.BaseAddress);
+        client.DefaultRequestHeaders.Add("Authorization", settings.AccessToken);
+        client.DefaultRequestHeaders.Add("User-Agent", settings.UserAgent);
+    });
+
+// Retrieve the Serilog settings
+var serilogSettings = builder.Services.BuildServiceProvider().GetRequiredService<IOptions<SerilogSettings>>().Value;
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.ControlledBy(new Serilog.Core.LoggingLevelSwitch(
+        Enum.Parse<LogEventLevel>(serilogSettings.MinimumLevel.Default, true)))
+    .WriteTo.File(
+        serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "File")?.Args.path,
+        rollingInterval: Enum.Parse<RollingInterval>(serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "File")?.Args.rollingInterval, true),
+        outputTemplate: serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "File")?.Args.outputTemplate)
+    .WriteTo.Console(outputTemplate: serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "Console")?.Args.outputTemplate)
+    .WriteTo.MSSqlServer(
+        serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "MSSqlServer")?.Args.connectionString,
+        serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "MSSqlServer")?.Args.tableName,
+        schemaName: serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "MSSqlServer")?.Args.schemaName,
+        autoCreateSqlTable: serilogSettings.WriteTo.FirstOrDefault(w => w.Name == "MSSqlServer")?.Args.autoCreateSqlTable ?? true) 
+    .CreateLogger();
+
+
+builder.Host.UseSerilog();
 
 var app = builder.Build();
 
@@ -16,29 +54,4 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
-
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
