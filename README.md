@@ -1,4 +1,4 @@
-## HI, welcome to that repo
+## HI, welcome to my repo
 
 Inside of the project you can navigate to folders with *****Example name 
 
